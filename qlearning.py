@@ -1,20 +1,21 @@
 import random
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
-env = gym.make("MountainCar-v0")
+env = gym.make('MountainCar-v0')
 alpha = 0.1 # learning rate
-gamma = 0.9 # discount factor
+gamma = 0.998 # discount factor
 epsilon = 1.0 # used for Epsilon greedy strategy
 epsilon_decay = 0.998 # Helps to go from a exploring state to a exploiting state
+max_episode = 50000
 
-
-DISCRETE_OS_SIZE = [20] * len(env.observation_space.high) # OS => observation space
+SHOW_EVERY = 500
+DISCRETE_OS_SIZE = [50] * len(env.observation_space.high) # OS => observation space
 discrete_os_win_size = (env.observation_space.high - env.observation_space.low) / DISCRETE_OS_SIZE
 
 
-q_table = np.random.uniform(low=-2, high=0.0, size=(DISCRETE_OS_SIZE + [env.action_space.n]))
-
+q_table = np.random.uniform(low=-2., high=0.0, size=(DISCRETE_OS_SIZE + [env.action_space.n]))
 
 done = False
 
@@ -59,15 +60,18 @@ def update_q_table(new_state, state, action, reward):
     set_q_value(new_Q, state, action)
 
 
-state = env.reset()
+aggr_episode_steps = {'episode': [], 'avg': [], 'min': [], 'max': []}
+episode_rewards = []
 
-for episode in range(10000):
+
+for episode in range(max_episode):
     state = env.reset()
-
+    step = 0
+    episode_reward = 0
     while not done:
         action = get_action(state)
         new_state, reward, done, _ = env.step(action)
-        # For some reason the reward given by env.step never changes, even if it
+        # For some reason, the reward given by env.step never changes, even if it
         # reaches the goal of the game of getting to the top (which is at 0.5).
         # For this reason we set the reward manually when the cart reaches the top
         if new_state[0] > 0.5:
@@ -76,10 +80,30 @@ for episode in range(10000):
 
         update_q_table(new_state, state, action, reward)
         state = new_state
-        if episode >= 10000-10:
+        step += 1
+        episode_reward += reward
+        if not episode % SHOW_EVERY:
             env.render()
 
     epsilon *= epsilon_decay
     done = False
 
+    episode_rewards.append(episode_reward)
+    if not episode % SHOW_EVERY:
+        aggr_episode_steps['episode'].append(episode)
+        aggr_episode_steps['avg'].append(sum(episode_rewards[-SHOW_EVERY:])/len(episode_rewards[-SHOW_EVERY:]))
+        aggr_episode_steps['min'].append(min(episode_rewards[-SHOW_EVERY:]))
+        aggr_episode_steps['max'].append(max(episode_rewards[-SHOW_EVERY:]))
+
+
 env.close()
+
+plt.plot(aggr_episode_steps['episode'], aggr_episode_steps['avg'], label='avg')
+plt.plot(aggr_episode_steps['episode'], aggr_episode_steps['min'], label='min')
+plt.plot(aggr_episode_steps['episode'], aggr_episode_steps['max'], label='max')
+plt.legend(loc=4) # Right bottom corner
+plt.xlabel('Episode')
+plt.ylabel('Reward')
+plt.title('Best performing mountain car')
+
+plt.show()
